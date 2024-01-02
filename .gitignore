@@ -1,4 +1,4 @@
 /target
 env.sh
-
+.DS_Store
 npm/bin/node_version
