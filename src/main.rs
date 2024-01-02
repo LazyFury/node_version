@@ -60,6 +60,10 @@ fn main() {
     if let Some(cmds) = matches.values_of("run") {
         cmd = cmds.collect::<Vec<_>>().join(" ");
     }
+    if cmd == "" {
+        println!("please set --run command");
+        return;
+    }
 
     // check n is installed
     let has_installed_n = has_installed_n();
@@ -74,10 +78,31 @@ fn main() {
     // run cmd
     let output = Command::new("sh")
         .args(["-c", cmd.as_str()])
-        .output()
-        .expect("failed to execute process");
-    println!("output: {:?}", output);
-    println!("result: {}", String::from_utf8(output.stdout).unwrap());
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn();
+    if let Ok(mut child) = output {
+        if let Some(stdout) = child.stdout.take() {
+            let  reader = io::BufReader::new(stdout);
+            for line in reader.lines() {
+                println!("{}", line.unwrap());
+            }
+        }
+        if let Some(stderr) = child.stderr.take() {
+            let  reader = io::BufReader::new(stderr);
+            for line in reader.lines() {
+                println!("{}", line.unwrap());
+            }
+        }
+        let status = child.wait().unwrap();
+        if !status.success() {
+            panic!("run command failed");
+        }
+    } else {
+        panic!("run command failed");
+    }
+
+
 }
 
 fn gen_env_sh(version: &str, output: &str) -> ControlFlow<()> {
