@@ -1,1 +1,4 @@
 /target
+env.sh
+
+npm/bin/node_version
