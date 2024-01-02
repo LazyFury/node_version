@@ -1,8 +1,7 @@
 {
   "name": "@sukeai/node_version",
-  "version": "1.0.0",
+  "version": "1.0.6",
   "description": "",
-  "main": "index.js",
   "bin":"./bin/node_version",
   "publishConfig":{
     "access":"public"
@@ -11,5 +10,5 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
-  "license": "ISC"
+  "license": "mit"
 }
