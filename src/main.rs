@@ -1,3 +1,4 @@
+use ansi_term::Color;
 use clap::{App, AppSettings, Arg};
 use std::{env, path::PathBuf, process::{Command, Stdio}, ops::ControlFlow, io::{self, BufRead}};
 
@@ -54,8 +55,7 @@ fn main() {
         }
     }
 
-    let version = matches.value_of("version").unwrap();
-    println!("version: {}", version);
+    let version: &str = matches.value_of("version").unwrap();
     let mut cmd: String = String::from("");
     if let Some(cmds) = matches.values_of("run") {
         cmd = cmds.collect::<Vec<_>>().join(" ");
@@ -67,14 +67,17 @@ fn main() {
 
     // check n is installed
     let has_installed_n = has_installed_n();
-    print!("has_installed_n: {:?}\n", has_installed_n);
+    print!("{}: {:?}\n",Color::Blue.paint("Has Installed n Package"), has_installed_n);
     if !has_installed_n {
         panic!("n is not installed, please install n first")
     }
 
+    println!("{}",Color::Blue.paint("Find Nodejs Version Path..."));
     let bin_dir = n_find_version(version);
+    println!("{}: {}",Color::Blue.paint("Nodejs Version"), version);
+
     env::set_var("PATH", format!("{}:{}", bin_dir, env::var("PATH").unwrap()));
-    print!("running : {:?}\n", cmd);
+    print!("{} : {:?}\n",Color::Green.paint("Running") , cmd);
     // run cmd
     let output = Command::new("sh")
         .args(["-c", cmd.as_str()])
@@ -85,13 +88,16 @@ fn main() {
         if let Some(stdout) = child.stdout.take() {
             let  reader = io::BufReader::new(stdout);
             for line in reader.lines() {
-                println!("{}", line.unwrap());
+                println!("{} {}", Color::Green.bold().paint("[stdout]"),line.unwrap());
             }
         }
         if let Some(stderr) = child.stderr.take() {
+            
             let  reader = io::BufReader::new(stderr);
+            // fix \r not read
+
             for line in reader.lines() {
-                println!("{}", line.unwrap());
+                println!("{} {}",Color::Red.blink().paint("[stderr]"), line.unwrap());
             }
         }
         let status = child.wait().unwrap();
