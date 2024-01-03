@@ -1,6 +1,6 @@
 {
   "name": "@sukeai/node_version",
-  "version": "1.0.9",
+  "version": "1.0.11",
   "description": "",
   "bin":"./bin/node_version",
   "publishConfig":{

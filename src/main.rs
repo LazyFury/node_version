@@ -1,6 +1,6 @@
 use ansi_term::Color;
 use clap::{App, AppSettings, Arg};
-use std::{env, path::PathBuf, process::{Command, Stdio}, ops::ControlFlow, io::{self, BufRead}};
+use std::{env, path::PathBuf, process::{Command, Stdio}, io::{self, BufRead}};
 
 fn main() {
     let matches = App::new("set_node_version")
@@ -50,11 +50,14 @@ fn main() {
     if let Some(matches) = matches.subcommand_matches("gen") {
         let output = matches.value_of("output").unwrap();
         let version = matches.value_of("version").unwrap();
-        if let ControlFlow::Break(_) = gen_env_sh(version, output) {
-            return;
-        }
+        return gen_env_sh(version, output)
     }
 
+    default_command(matches); 
+
+}
+
+fn default_command(matches: clap::ArgMatches) {
     let version: &str = matches.value_of("version").unwrap();
     let mut cmd: String = String::from("");
     if let Some(cmds) = matches.values_of("run") {
@@ -65,6 +68,10 @@ fn main() {
         return;
     }
 
+    run_command(version, cmd)
+}
+
+fn run_command(version: &str, cmd: String){
     // check n is installed
     let has_installed_n = has_installed_n();
     print!("{}: {:?}\n",Color::Blue.paint("Has Installed n Package"), has_installed_n);
@@ -92,7 +99,7 @@ fn main() {
             }
         }
         if let Some(stderr) = child.stderr.take() {
-            
+        
             let  reader = io::BufReader::new(stderr);
             // fix \r not read
 
@@ -107,11 +114,9 @@ fn main() {
     } else {
         panic!("run command failed");
     }
-
-
 }
 
-fn gen_env_sh(version: &str, output: &str) -> ControlFlow<()> {
+fn gen_env_sh(version: &str, output: &str) {
     let bin_dir = n_find_version(version);
     println!("bin_dir: {:?}", bin_dir);
     let sh = format!(r#"
@@ -120,7 +125,6 @@ echo set node version:
 node -v
         "#, bin_dir);
     std::fs::write(output, sh).expect("write file failed");
-    return ControlFlow::Break(());
 }
 
 fn has_installed_n() -> bool {
