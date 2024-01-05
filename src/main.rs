@@ -1,6 +1,6 @@
 use ansi_term::Color;
 use clap::{App, AppSettings, Arg};
-use std::{env, path::PathBuf, process::{Command, Stdio}, io::{self, BufRead}};
+use std::{env, path::PathBuf, process::{Command, Stdio}, io::{self, BufRead, Read}};
 
 fn main() {
     let matches = App::new("set_node_version")
@@ -92,25 +92,47 @@ fn run_command(version: &str, cmd: String){
         .stderr(Stdio::piped())
         .spawn();
     if let Ok(mut child) = output {
-        if let Some(stdout) = child.stdout.take() {
-            let  reader = io::BufReader::new(stdout);
-            for line in reader.lines() {
-                println!("{} {}", Color::Green.bold().paint("[stdout]"),line.unwrap());
-            }
-        }
-        if let Some(stderr) = child.stderr.take() {
-        
-            let  reader = io::BufReader::new(stderr);
-            // fix \r not read
+        let stdout = child.stdout.take().unwrap();
+        let stderr = child.stderr.take().unwrap();
+        let mut stdout_reader = io::BufReader::new(stdout);
+        let mut stderr_reader = io::BufReader::new(stderr);
 
-            for line in reader.lines() {
-                println!("{} {}",Color::Red.blink().paint("[stderr]"), line.unwrap());
+        let out_thread = std::thread::spawn(move || {
+            let mut buffer = [0;1024];
+            loop{
+                let n = stdout_reader.read(&mut buffer).unwrap();
+                if n == 0 {
+                    break;
+                }
+                let s = String::from_utf8_lossy(&buffer[..n]);
+                let s = s.replace("\r", "");
+                print!("{} {}\n", Color::Green.paint("[stdout]"),s);
             }
-        }
+        });
+
+        let err_thread = std::thread::spawn(move || {
+            let mut buffer = [0;1024];
+            loop{
+                let n = stderr_reader.read(&mut buffer).unwrap();
+                if n == 0 {
+                    break;
+                }
+                let s = String::from_utf8_lossy(&buffer[..n]);
+                let s = s.replace("\r", "");
+                print!("{} {}", Color::Red.paint("[strerr]"),s);
+            }
+        });
+
+        
+
         let status = child.wait().unwrap();
         if !status.success() {
             panic!("run command failed");
         }
+
+        out_thread.join().unwrap();
+        err_thread.join().unwrap();
+
     } else {
         panic!("run command failed");
     }
