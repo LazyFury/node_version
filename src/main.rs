@@ -1,6 +1,9 @@
 use ansi_term::Color;
 use clap::{App, AppSettings, Arg};
-use std::{env, path::PathBuf, process::{Command, Stdio}, io::{self, BufRead, Read}};
+use std::{env, process::{Command, Stdio}, io::{self, Read, Write}};
+mod source_file;
+mod node_manager;
+use node_manager::manager;
 
 fn main() {
     let matches = App::new("set_node_version")
@@ -50,7 +53,7 @@ fn main() {
     if let Some(matches) = matches.subcommand_matches("gen") {
         let output = matches.value_of("output").unwrap();
         let version = matches.value_of("version").unwrap();
-        return gen_env_sh(version, output)
+        return source_file::gen(version, output)
     }
 
     default_command(matches); 
@@ -73,14 +76,14 @@ fn default_command(matches: clap::ArgMatches) {
 
 fn run_command(version: &str, cmd: String){
     // check n is installed
-    let has_installed_n = has_installed_n();
+    let has_installed_n = manager::has_installed();
     print!("{}: {:?}\n",Color::Blue.paint("Has Installed n Package"), has_installed_n);
     if !has_installed_n {
         panic!("n is not installed, please install n first")
     }
 
     println!("{}",Color::Blue.paint("Find Nodejs Version Path..."));
-    let bin_dir = n_find_version(version);
+    let bin_dir = manager::find_version(version);
     println!("{}: {}",Color::Blue.paint("Nodejs Version"), version);
 
     env::set_var("PATH", format!("{}:{}", bin_dir, env::var("PATH").unwrap()));
@@ -105,8 +108,15 @@ fn run_command(version: &str, cmd: String){
                     break;
                 }
                 let s = String::from_utf8_lossy(&buffer[..n]);
-                let s = s.replace("\r", "");
-                print!("{} {}\n", Color::Green.paint("[stdout]"),s);
+                // split to arr 
+                let lines:Vec<&str> = s.split(|c| c=='\n' || c=='\r')
+                            .filter(|&line| !line.is_empty())
+                            .collect();
+                for line in lines {
+                    io::stdout().flush().unwrap();
+                    // let line = line.replace("\r", "");
+                    print!("{} {}\n", Color::Green.paint("[stdout]"),line);
+                }
             }
         });
 
@@ -118,13 +128,19 @@ fn run_command(version: &str, cmd: String){
                     break;
                 }
                 let s = String::from_utf8_lossy(&buffer[..n]);
-                let s = s.replace("\r", "");
-                print!("{} {}", Color::Red.paint("[strerr]"),s);
+                // split to arr
+                let lines:Vec<&str> = s.split(|c| c=='\n' || c=='\r')
+                            .filter(|&line| !line.is_empty())
+                            .collect();
+                for line in lines {
+                    io::stderr().flush().unwrap();
+                    // let line = line.replace("\r", "");
+                    print!("{} {}\n", Color::Red.paint("[stderr]"),line);
+                }
             }
         });
 
         
-
         let status = child.wait().unwrap();
         if !status.success() {
             panic!("run command failed");
@@ -132,69 +148,28 @@ fn run_command(version: &str, cmd: String){
 
         out_thread.join().unwrap();
         err_thread.join().unwrap();
+        io::stdout().flush().unwrap();
+        io::stderr().flush().unwrap();
+
+        // handler ctrl c 
+        ctrlc::set_handler(move || {
+            println!("{}: {}", Color::Red.paint("Ctrl C"), "stop child process");
+            child.kill().unwrap();
+            std::process::exit(0);
+        }).expect("Error setting Ctrl-C handler");
+
 
     } else {
         panic!("run command failed");
     }
 }
 
-fn gen_env_sh(version: &str, output: &str) {
-    let bin_dir = n_find_version(version);
-    println!("bin_dir: {:?}", bin_dir);
-    let sh = format!(r#"
-export PATH={}:$PATH
-echo set node version:
-node -v
-        "#, bin_dir);
-    std::fs::write(output, sh).expect("write file failed");
-}
 
-fn has_installed_n() -> bool {
-    let output = Command::new("which")
-        .args(["n"])
-        .output()
-        .expect("failed to check has_installed_n");
-    return output.status.success();
-}
 
-fn n_has_installed_version(version: &str) -> bool {
-    let output = Command::new("n")
-        .args(["ls"])
-        .output()
-        .expect("failed to check n_has_installed_version");
-    let output = String::from_utf8(output.stdout).unwrap();
-    return output.contains(version);
-}
 
-fn n_install(version: &str) -> io::Result<bool> {
-    let mut cmd = Command::new("n")
-        .args(["install", version])
-        .stdout(Stdio::piped())
-        .spawn()?;
 
-    if let Some(stdout) = cmd.stdout.take() {
-        let  reader = io::BufReader::new(stdout);
-        for line in reader.lines() {
-            println!("{}", line?);
-        }
-    }
-    let status = cmd.wait()?;
-    Ok(status.success())
-}
 
-fn n_find_version(version: &str) -> String {
-    if !n_has_installed_version(version) {
-        print!("n has not installed version: {:?}", version);
-        n_install(version).expect("n install failed");
-    }
 
-    let output = Command::new("n")
-        .args(["bin",version])
-        .output()
-        .expect("failed to execute process 'n bin'");
-    let output = String::from_utf8(output.stdout).unwrap();
-    let path_buf = PathBuf::from(output.trim());
-    let bin_dir = path_buf.parent().unwrap();
-    return bin_dir.to_str().unwrap().to_string();
-}
+
+
 
